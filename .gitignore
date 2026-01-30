@@ -1,0 +1,3 @@
+# Ignore the .slingshot folder and its contents
+.slingshot/
+node_modules/
