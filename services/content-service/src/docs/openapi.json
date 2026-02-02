@@ -1,0 +1,295 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Content Service API",
+    "version": "1.0.0",
+    "description": "API for document upload, listing, status, and deletion for the AI FAQ Platform. Secured via JWT + HMAC at the API Gateway. For local development, headers may be injected by the service."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3002",
+      "description": "Local Development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Documents",
+      "description": "Document management operations"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": [],
+      "clientId": [],
+      "timestamp": [],
+      "signature": []
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "clientId": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Client-ID"
+      },
+      "timestamp": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Timestamp"
+      },
+      "signature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Signature"
+      }
+    },
+    "schemas": {
+      "Document": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "org_id": { "type": "string", "format": "uuid" },
+          "filename": { "type": "string" },
+          "s3_key": { "type": "string" },
+          "content_type": { "type": "string" },
+          "file_size_bytes": { "type": "integer" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "uploaded", "processing", "completed", "failed"]
+          },
+          "chunks_count": { "type": "integer" },
+          "uploaded_by": { "type": "string", "format": "uuid" },
+          "uploaded_at": { "type": "string", "format": "date-time" },
+          "processed_at": { "type": "string", "format": "date-time" },
+          "error_message": { "type": "string" },
+          "error_code": { "type": "string" },
+          "retry_count": { "type": "integer" }
+        }
+      },
+      "UploadRequest": {
+        "type": "object",
+        "required": ["filename", "content_type"],
+        "properties": {
+          "filename": { "type": "string", "example": "guide.pdf" },
+          "content_type": { "type": "string", "example": "application/pdf" },
+          "file_size": { "type": "integer", "example": 1048576 }
+        }
+      },
+      "UploadResponse": {
+        "type": "object",
+        "properties": {
+          "document_id": { "type": "string", "format": "uuid" },
+          "presigned_url": { "type": "string" },
+          "s3_key": { "type": "string" },
+          "expires_in": { "type": "integer", "example": 900 },
+          "max_file_size": { "type": "integer" },
+          "upload_instructions": {
+            "type": "object",
+            "properties": {
+              "method": { "type": "string", "example": "PUT" },
+              "headers": {
+                "type": "object",
+                "properties": {
+                  "Content-Type": { "type": "string", "example": "application/pdf" }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "ListDocumentsResponse": {
+        "type": "object",
+        "properties": {
+          "documents": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Document" }
+          },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "total": { "type": "integer" },
+              "limit": { "type": "integer" },
+              "offset": { "type": "integer" },
+              "has_more": { "type": "boolean" }
+            }
+          }
+        }
+      },
+      "DocumentStatus": {
+        "type": "object",
+        "properties": {
+          "document_id": { "type": "string", "format": "uuid" },
+          "filename": { "type": "string" },
+          "status": { "type": "string", "enum": ["pending", "uploaded", "processing", "completed", "failed"] },
+          "uploaded_at": { "type": "string", "format": "date-time" },
+          "chunks_count": { "type": "integer" },
+          "processed_at": { "type": "string", "format": "date-time" },
+          "processing_time_seconds": { "type": "integer" },
+          "error_message": { "type": "string" },
+          "error_code": { "type": "string" },
+          "retry_count": { "type": "integer" }
+        }
+      },
+      "DeleteResponse": {
+        "type": "object",
+        "properties": {
+          "message": { "type": "string" },
+          "document_id": { "type": "string", "format": "uuid" },
+          "deleted_at": { "type": "string", "format": "date-time" },
+          "cleanup": {
+            "type": "object",
+            "properties": {
+              "metadata_deleted": { "type": "boolean" },
+              "s3_deleted": { "type": "boolean" }
+            }
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" },
+          "code": { "type": "string" }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Unauthorized",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "NotFound": {
+        "description": "Not Found",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      },
+      "BadRequest": {
+        "description": "Bad Request",
+        "content": {
+          "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/v1/documents/upload": {
+      "post": {
+        "summary": "Generate presigned S3 upload URL",
+        "tags": ["Documents"],
+        "security": [{ "bearerAuth": [], "clientId": [], "timestamp": [], "signature": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UploadRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Presigned URL created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UploadResponse" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/v1/documents": {
+      "get": {
+        "summary": "List documents",
+        "tags": ["Documents"],
+        "security": [{ "bearerAuth": [], "clientId": [], "timestamp": [], "signature": [] }],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 0, "default": 20 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0, "default": 0 } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "example": "uploaded_at:desc" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of documents",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ListDocumentsResponse" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/v1/documents/{id}/status": {
+      "get": {
+        "summary": "Get document status",
+        "tags": ["Documents"],
+        "security": [{ "bearerAuth": [], "clientId": [], "timestamp": [], "signature": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document status",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DocumentStatus" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/documents/{id}": {
+      "delete": {
+        "summary": "Delete a document",
+        "tags": ["Documents"],
+        "security": [{ "bearerAuth": [], "clientId": [], "timestamp": [], "signature": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteResponse" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/documents/webhook/s3-uploaded": {
+      "post": {
+        "summary": "Webhook to mark document as uploaded (S3 callback)",
+        "tags": ["Documents"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["document_id"],
+                "properties": { "document_id": { "type": "string", "format": "uuid" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated",
+            "content": { "application/json": { "schema": { "type": "object", "properties": { "message": { "type": "string" }, "document_id": { "type": "string", "format": "uuid" } } } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    }
+  }
+}
