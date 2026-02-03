@@ -10,6 +10,7 @@ Complete authentication and authorization service for the AI-powered FAQ & Chatb
 - ✅ **Account Security** - Password hashing, account lockout, failed attempt tracking
 - ✅ **Token Management** - Access tokens (15 min), Refresh tokens (7 days), Token rotation
 - ✅ **Audit Logging** - Complete security event logging
+- ✅ **Validation Endpoints** - Service-to-service authentication validation
 - ✅ **Swagger Documentation** - Interactive API docs
 - ✅ **Docker Ready** - Full containerization with docker-compose
 
@@ -104,6 +105,66 @@ Content-Type: application/json
   "role": "user"
 }
 ```
+
+## Service-to-Service Validation
+
+The Auth Service provides validation endpoints for other services to verify JWT tokens and HMAC signatures. This enables a **hybrid authentication architecture** where services can choose between local validation (performance) and centralized validation (security).
+
+### JWT Token Validation
+
+**Endpoint:** `POST /v1/auth/validate-jwt`
+
+Validate JWT access tokens and return user context for other services.
+
+```http
+POST /v1/auth/validate-jwt
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+```
+
+**Response:**
+```json
+{
+  "valid": true,
+  "user": {
+    "user_id": "uuid",
+    "org_id": "uuid",
+    "role": "admin"
+  }
+}
+```
+
+### HMAC Signature Validation
+
+**Endpoint:** `POST /v1/auth/validate-hmac`
+
+Validate HMAC signatures for organization-level authentication.
+
+```http
+POST /v1/auth/validate-hmac
+Content-Type: application/json
+
+{
+  "client_id": "pk_xxx",
+  "signature": "a1b2c3...",
+  "timestamp": "1738459200000",
+  "payload": {
+    "method": "POST",
+    "path": "/api/content/upload"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "valid": true,
+  "org_id": "uuid",
+  "org_name": "ACME Corp"
+}
+```
+
+📖 **Complete Documentation:** See [`AUTH_VALIDATION_DOCS.md`](AUTH_VALIDATION_DOCS.md) for comprehensive usage patterns, client libraries, security considerations, and implementation examples.
 
 ## Project Structure
 
