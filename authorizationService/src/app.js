@@ -81,7 +81,8 @@ app.get('/health', (req, res) => {
 });
 
 // API documentation
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+app.use('/docs', swaggerUi.serve);
+app.use('/docs', swaggerUi.setup(swaggerSpec, {
   customCss: '.swagger-ui { max-width: 1200px; }',
   customSiteTitle: 'Auth Service API Docs'
 }));

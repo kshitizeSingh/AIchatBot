@@ -334,3 +334,4 @@ router.post('/validate-hmac', async (req, res) => {
     });
   }
 });
+module.exports = router;
