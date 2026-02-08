@@ -60,6 +60,7 @@ const swaggerSpec = swaggerJsDoc(swaggerOptions);
 
 // Middleware
 app.use(helmet());
+console.log(env.cors,'corsvalue');
 app.use(cors(env.cors));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

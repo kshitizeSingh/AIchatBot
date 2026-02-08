@@ -21,7 +21,7 @@ const validateEnvironment = () => {
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
-
+  console.log(process.env.CORS_ORIGIN);
   return {
     nodeEnv: process.env.NODE_ENV || 'development',
     port: parseInt(process.env.PORT || '3000', 10),
@@ -44,7 +44,7 @@ const validateEnvironment = () => {
       level: process.env.LOG_LEVEL || 'info'
     },
     cors: {
-      origin: (process.env.CORS_ORIGIN || 'http://localhost:3000').split(','),
+      origin: (process.env.CORS_ORIGIN || 'http://localhost:8001').split(','),
       credentials: true
     }
   };
