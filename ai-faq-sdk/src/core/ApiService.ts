@@ -28,11 +28,17 @@ export class ApiService {
    */
   private generateHMAC(method: string, path: string, body: any = null): { timestamp: number; signature: string } {
     const timestamp = Date.now();
-    const bodyStr = body ? JSON.stringify(body) : '';
-    const payload = `${method}|${path}|${timestamp}|${bodyStr}`;
+    
+    // CHANGE: Use JSON structure instead of pipe-delimited string to match server
+    const payload = {
+      method,
+      path,
+      timestamp: timestamp.toString(), // CHANGE: Ensure string consistency
+      body: body || {}
+    };
 
-    // Generate HMAC-SHA256 using crypto-js
-    const signature = Base64.stringify(HmacSHA256(payload, this.config.clientSecret));
+    // CHANGE: Generate HMAC-SHA256 with hex encoding
+    const signature = HmacSHA256(JSON.stringify(payload), this.config.clientSecret).toString();
 
     return { timestamp, signature };
   }

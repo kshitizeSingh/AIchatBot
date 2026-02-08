@@ -83,6 +83,7 @@ class CryptoService {
   }
 
   verifyHMAC(signature, clientSecretHash, payload) {
+    console.log(signature, clientSecretHash, payload);
     const expectedSignature = this.generateHMAC(clientSecretHash, payload);
 
     return crypto.timingSafeEqual(

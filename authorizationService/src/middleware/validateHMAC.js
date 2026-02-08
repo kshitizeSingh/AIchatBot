@@ -50,7 +50,7 @@ module.exports = async (req, res, next) => {
     try {
       cryptoService.verifyHMAC(signature, org.client_secret_hash, payload);
     } catch (error) {
-      logger.warn('Invalid HMAC signature', { org_id: org.id, ip: req.ip });
+      logger.warn('Invalid HMAC signature', { org_id: org.id, ip: req.ip , error});
       return res.status(401).json(
         errorResponse('INVALID_SIGNATURE', 'HMAC signature verification failed')
       );
