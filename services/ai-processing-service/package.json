@@ -1,0 +1,42 @@
+{
+  "name": "ai-processing-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "start:local": "cross-env LOCAL_TEST_MODE=true node src/index.js",
+    "test": "jest --passWithNoTests",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "dev:local": "cross-env LOCAL_TEST_MODE=true nodemon src/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@langchain/textsplitters": "^0.0.1",
+    "aws-sdk": "^2.1492.0",
+    "axios": "^1.6.7",
+    "dotenv": "^16.3.1",
+    "express": "^4.19.2",
+    "kafkajs": "^2.2.4",
+    "langchain": "^0.1.0",
+    "mammoth": "^1.6.0",
+    "pdf-parse": "^1.1.1",
+    "pg": "^8.11.3",
+    "prom-client": "^14.2.0",
+    "winston": "^3.11.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@pinecone-database/pinecone": "^7.0.0",
+    "cross-env": "^7.0.3",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2",
+    "prettier": "^3.2.5"
+  }
+}
