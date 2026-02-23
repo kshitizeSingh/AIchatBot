@@ -39,6 +39,7 @@
     "jsonwebtoken": "^9.0.2",
     "axios": "^1.6.0",
     "@pinecone-database/pinecone": "^3.0.0",
+    "node-fetch": "^2.7.0",
     "pg": "^8.11.3",
     "helmet": "^7.1.0",
     "express-rate-limit": "^7.1.5",

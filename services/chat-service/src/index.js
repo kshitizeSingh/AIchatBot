@@ -19,20 +19,11 @@ const app = express();
 // Trust proxy for rate limiting and real IP detection
 app.set('trust proxy', 1);
 
-
-// Security middleware with Swagger UI allowances
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-
-
-
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // unsafe-eval needed for Swagger UI
-      imgSrc: ["'self'", "data:", "https:", "https://validator.swagger.io"],
-      connectSrc: ["'self'"],
-
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -97,7 +88,7 @@ app.use((req, res, next) => {
 
 /**
  * @swagger
- * /::
+ * /:
  *   get:
  *     summary: Service information
  *     description: Returns basic service information and links to documentation
@@ -192,15 +183,13 @@ function gracefulShutdown(signal) {
       logger.info('HTTP server closed');
       
       // Close database connections
-      const { pool } = require('./config/database');
-      if (pool) {
-        pool.end(() => {
-          logger.info('Database pool closed');
-          process.exit(0);
-        });
-      } else {
+      const database = require('./config/database');
+      database.close().then(() => {
+        logger.info('Database pool closed');
         process.exit(0);
-      }
+      }).catch(() => {
+        process.exit(0);
+      });
     });
     
     // Force close after 10 seconds
@@ -239,15 +228,13 @@ async function startServer() {
     }
     
     // Test database connection
-    const { pool } = require('./config/database');
-    const client = await pool.connect();
-    await client.query('SELECT 1');
-    client.release();
+    const database = require('./config/database');
+    await database.initialize();
     logger.info('Database connection validated');
     
     // Test Pinecone connection
     const pinecone = require('./config/pinecone');
-    await pinecone.describeIndexStats();
+    await pinecone.initialize();
     logger.info('Pinecone connection validated');
     
     // Test Ollama connection

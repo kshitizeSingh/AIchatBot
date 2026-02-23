@@ -7,133 +7,34 @@ const logger = require('../utils/logger');
 
 const router = express.Router();
 
-/**
- * @swagger
- * /health:
- *   get:
- *     tags:
- *       - Health
- *     summary: Service liveness check
- *     description: |
- *       Liveness probe endpoint that indicates whether the service is running.
- *       This endpoint always returns 200 OK if the process is alive and able to handle requests.
- *       
- *       **Use Case:**
- *       - Kubernetes liveness probes
- *       - Load balancer health checks
- *       - Basic service availability monitoring
- *       
- *       **Response Time:** < 10ms (no external dependencies)
- *     
- *     responses:
- *       '200':
- *         description: Service is alive and running
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/HealthResponse'
- *             example:
- *               status: 'healthy'
- *               timestamp: '2026-02-22T10:00:00Z'
- *               service: 'chat-orchestration-service'
- * 
- * GET /health
- * Liveness probe - returns 200 if the process is running
- */
+// GET /health - Liveness probe
 router.get('/health', (req, res) => {
-  res.status(200).json({
+  res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'chat-orchestration-service'
   });
 });
 
-/**
- * @swagger
- * /ready:
- *   get:
- *     tags:
- *       - Health
- *     summary: Service readiness check
- *     description: |
- *       Readiness probe endpoint that verifies all external dependencies are available
- *       and the service is ready to handle requests.
- *       
- *       **Dependencies Checked:**
- *       - **PostgreSQL**: Database connectivity and query execution
- *       - **Pinecone**: Vector database connectivity and index access
- *       - **Ollama**: AI model server availability and required models
- *       
- *       **Health Criteria:**
- *       - All dependencies must respond within timeout (5 seconds)
- *       - Required AI models must be loaded in Ollama
- *       - Database connections must be successful
- *       
- *       **Use Case:**
- *       - Kubernetes readiness probes
- *       - Service mesh health checks
- *       - Deployment validation
- *     
- *     responses:
- *       '200':
- *         description: Service is ready - all dependencies healthy
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ReadinessResponse'
- *             example:
- *               status: 'ready'
- *               timestamp: '2026-02-22T10:00:00Z'
- *               service: 'chat-orchestration-service'
- *               checks:
- *                 postgresql:
- *                   status: 'healthy'
- *                   latency_ms: 45
- *                   error: null
- *                 pinecone:
- *                   status: 'healthy'
- *                   latency_ms: 120
- *                   error: null
- *                 ollama:
- *                   status: 'healthy'
- *                   latency_ms: 200
- *                   error: null
- *                   models:
- *                     embedding: 'nomic-embed-text'
- *                     generation: 'llama3'
- *       
- *       '503':
- *         description: Service not ready - one or more dependencies unhealthy
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ReadinessResponse'
- *             example:
- *               status: 'not_ready'
- *               timestamp: '2026-02-22T10:00:00Z'
- *               service: 'chat-orchestration-service'
- *               checks:
- *                 postgresql:
- *                   status: 'healthy'
- *                   latency_ms: 45
- *                   error: null
- *                 pinecone:
- *                   status: 'unhealthy'
- *                   latency_ms: null
- *                   error: 'Connection timeout'
- *                 ollama:
- *                   status: 'unhealthy'
- *                   latency_ms: null
- *                   error: 'Embedding model not found'
- * 
- * GET /ready
- * Readiness probe - checks all external dependencies
- */
+// GET /ready - Readiness probe
 router.get('/ready', async (req, res) => {
   const checks = {
-    postgresql: { status: 'unknown', latency_ms: null, error: null },
-    pinecone: { status: 'unknown', latency_ms: null, error: null },
-    ollama: { status: 'unknown', latency_ms: null, error: null }
+    postgresql: {
+      status: 'unknown',
+      latency_ms: null,
+      error: null
+    },
+    pinecone: {
+      status: 'unknown',
+      latency_ms: null,
+      error: null
+    },
+    ollama: {
+      status: 'unknown',
+      latency_ms: null,
+      error: null,
+      models: null
+    }
   };
   
   let overallStatus = 'ready';
