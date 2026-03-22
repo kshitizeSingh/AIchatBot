@@ -180,9 +180,7 @@ router.use(chatRateLimit);
  *       
  *       '500':
  *         $ref: '#/components/responses/InternalServerError'
- * 
- * POST /v1/chat/query
- * Main RAG endpoint - handles both streaming and non-streaming responses
+
  */
 router.post('/query', async (req, res) => {
   const { query, conversation_id, options = {} } = req.body;
@@ -237,22 +235,15 @@ router.post('/query', async (req, res) => {
       }, 30000);
       
       try {
-        await orchestrationService.chat({
-          query,
-          conversation_id,
-          org_id,
-          user_id,
-          options
-        }, {
-          onSources: (data) => {
-            res.write(`event: sources\n`);
-            res.write(`data: ${JSON.stringify(data)}\n\n`);
-          },
+        // Merge streaming callbacks into options
+        const streamingOptions = {
+          ...options,
+          stream: true,
           onToken: (token) => {
             res.write(`event: token\n`);
             res.write(`data: ${JSON.stringify({ token })}\n\n`);
           },
-          onDone: (result) => {
+          onComplete: (result) => {
             res.write(`event: done\n`);
             res.write(`data: ${JSON.stringify(result)}\n\n`);
             res.end();
@@ -271,7 +262,13 @@ router.post('/query', async (req, res) => {
             res.end();
             clearInterval(keepAlive);
           }
-        });
+        };
+        
+        await orchestrationService.chat(
+          { query, conversation_id, options: streamingOptions },
+          { user_id },
+          { org_id }
+        );
       } catch (error) {
         clearInterval(keepAlive);
         res.write(`event: error\n`);
@@ -287,13 +284,11 @@ router.post('/query', async (req, res) => {
       
     } else {
       // Handle non-streaming response
-      const result = await orchestrationService.chat({
-        query,
-        conversation_id,
-        org_id,
-        user_id,
-        options
-      });
+      const result = await orchestrationService.chat(
+        { query, conversation_id, options },
+        { user_id },
+        { org_id }
+      );
       
       logger.info('Chat query completed', {
         org_id,

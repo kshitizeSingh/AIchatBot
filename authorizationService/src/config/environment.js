@@ -37,7 +37,7 @@ const validateEnvironment = () => {
     },
     jwt: {
       secret: process.env.JWT_SECRET || 'your-256-bit-secret-key-change-in-production',
-      accessExpiry: 900,   // 15 minutes
+      accessExpiry: 36000 ,   // 10 hrs
       refreshExpiry: 604800 // 7 days
     },
     logging: {

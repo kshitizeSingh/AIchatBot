@@ -1,0 +1,254 @@
+# Prometheus Alert Rules for API Gateway and Services
+# These rules define conditions that trigger alerts
+
+groups:
+  # API Gateway Alerts
+  - name: api_gateway_alerts
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: (
+          rate(nginx_http_requests_total{status=~"5.."}[5m]) /
+          rate(nginx_http_requests_total[5m])
+        ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "High error rate detected in API Gateway"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      # High response time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(nginx_http_request_duration_seconds_bucket[5m])) > 2
+        for: 3m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "High response time in API Gateway"
+          description: "95th percentile response time is {{ $value }}s"
+
+      # Rate limiting triggered frequently
+      - alert: HighRateLimiting
+        expr: rate(nginx_http_requests_total{status="429"}[5m]) > 10
+        for: 1m
+        labels:
+          severity: info
+          service: api-gateway
+        annotations:
+          summary: "High rate limiting activity"
+          description: "Rate limiting is being triggered {{ $value }} times per second"
+
+      # Gateway down
+      - alert: GatewayDown
+        expr: up{job="nginx-gateway"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api-gateway
+        annotations:
+          summary: "API Gateway is down"
+          description: "API Gateway has been down for more than 1 minute"
+
+  # Service Health Alerts
+  - name: service_health_alerts
+    rules:
+      # Auth service down
+      - alert: AuthServiceDown
+        expr: up{job="auth-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: auth-service
+        annotations:
+          summary: "Auth Service is down"
+          description: "Auth Service has been unreachable for more than 2 minutes"
+
+      # Content service down
+      - alert: ContentServiceDown
+        expr: up{job="content-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: content-service
+        annotations:
+          summary: "Content Service is down"
+          description: "Content Service has been unreachable for more than 2 minutes"
+
+      # Chat service down
+      - alert: ChatServiceDown
+        expr: up{job="chat-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: chat-service
+        annotations:
+          summary: "Chat Service is down"
+          description: "Chat Service has been unreachable for more than 2 minutes"
+
+      # AI Processing service down
+      - alert: AIProcessingServiceDown
+        expr: up{job="ai-processing-service"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: ai-processing-service
+        annotations:
+          summary: "AI Processing Service is down"
+          description: "AI Processing Service has been unreachable for more than 2 minutes"
+
+  # Infrastructure Alerts
+  - name: infrastructure_alerts
+    rules:
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: (
+          100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+        ) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (
+          (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) /
+          node_memory_MemTotal_bytes * 100
+        ) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}% on {{ $labels.instance }}"
+
+      # Low disk space
+      - alert: LowDiskSpace
+        expr: (
+          (node_filesystem_size_bytes{fstype!="tmpfs"} - node_filesystem_free_bytes{fstype!="tmpfs"}) /
+          node_filesystem_size_bytes{fstype!="tmpfs"} * 100
+        ) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space detected"
+          description: "Disk usage is {{ $value }}% on {{ $labels.instance }} ({{ $labels.device }})"
+
+      # Database connection issues
+      - alert: DatabaseConnectionIssues
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection issues"
+          description: "PostgreSQL database is unreachable"
+
+      # Redis connection issues
+      - alert: RedisConnectionIssues
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          service: cache
+        annotations:
+          summary: "Redis connection issues"
+          description: "Redis cache is unreachable"
+
+  # Application Performance Alerts
+  - name: application_performance_alerts
+    rules:
+      # High request volume
+      - alert: HighRequestVolume
+        expr: rate(nginx_http_requests_total[5m]) > 1000
+        for: 2m
+        labels:
+          severity: info
+          service: api-gateway
+        annotations:
+          summary: "High request volume"
+          description: "Request rate is {{ $value }} requests/second"
+
+      # Authentication failures
+      - alert: HighAuthFailures
+        expr: (
+          rate(http_requests_total{job="auth-service",status=~"4.."}[5m]) /
+          rate(http_requests_total{job="auth-service"}[5m])
+        ) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          service: auth-service
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Auth failure rate is {{ $value | humanizePercentage }}"
+
+      # File upload failures
+      - alert: HighUploadFailures
+        expr: (
+          rate(http_requests_total{job="content-service",method="POST",status=~"5.."}[5m]) /
+          rate(http_requests_total{job="content-service",method="POST"}[5m])
+        ) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          service: content-service
+        annotations:
+          summary: "High file upload failure rate"
+          description: "Upload failure rate is {{ $value | humanizePercentage }}"
+
+      # Chat service response time
+      - alert: SlowChatResponses
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="chat-service"}[5m])) > 5
+        for: 3m
+        labels:
+          severity: warning
+          service: chat-service
+        annotations:
+          summary: "Slow chat service responses"
+          description: "95th percentile response time is {{ $value }}s for chat service"
+
+  # Security Alerts
+  - name: security_alerts
+    rules:
+      # Suspicious request patterns
+      - alert: SuspiciousRequestPattern
+        expr: rate(nginx_http_requests_total{status="403"}[5m]) > 50
+        for: 1m
+        labels:
+          severity: warning
+          service: api-gateway
+        annotations:
+          summary: "Suspicious request pattern detected"
+          description: "High number of 403 responses: {{ $value }} requests/second"
+
+      # DDoS-like traffic
+      - alert: PossibleDDoS
+        expr: rate(nginx_http_requests_total[1m]) > 5000
+        for: 30s
+        labels:
+          severity: critical
+          service: api-gateway
+        annotations:
+          summary: "Possible DDoS attack detected"
+          description: "Very high request rate: {{ $value }} requests/second"
+
+      # Too many failed login attempts
+      - alert: BruteForceAttempt
+        expr: (
+          rate(http_requests_total{job="auth-service",endpoint="/login",status="401"}[5m])
+        ) > 20
+        for: 1m
+        labels:
+          severity: warning
+          service: auth-service
+        annotations:
+          summary: "Possible brute force attack"
+          description: "High number of failed login attempts: {{ $value }} attempts/second"

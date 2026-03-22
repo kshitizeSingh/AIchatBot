@@ -174,7 +174,7 @@ async function retryOllama(fn, options = {}) {
   return retry(fn, {
     maxAttempts: 3,
     baseMs: 1000,
-    maxMs: 10000,
+    maxMs: 200000,
     shouldRetry: (error) => {
       // Ollama-specific retry logic
       const statusCode = error.status || error.statusCode;

@@ -101,7 +101,7 @@ class RetrievalService {
         duration: `${duration}ms`,
         documentId
       });
-
+      console.log('Retrieved passages:', filteredPassages);
       return filteredPassages;
     } catch (error) {
       const duration = Date.now() - startTime;

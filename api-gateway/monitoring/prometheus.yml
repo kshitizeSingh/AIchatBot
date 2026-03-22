@@ -1,0 +1,149 @@
+# Prometheus Configuration for API Gateway Monitoring
+# This configuration defines scrape targets and rules for monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'faq-platform'
+    environment: 'production'
+
+# Rule files
+rule_files:
+  - "alert_rules.yml"
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  # API Gateway Nginx metrics
+  - job_name: 'nginx-gateway'
+    static_configs:
+      - targets: ['api-gateway:80']
+    scrape_interval: 10s
+    metrics_path: /metrics
+    scrape_timeout: 5s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+
+  # Auth Service
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:3000']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Content Service
+  - job_name: 'content-service'
+    static_configs:
+      - targets: ['content-service:3002']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Chat Service
+  - job_name: 'chat-service'
+    static_configs:
+      - targets: ['chat-service:3003']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # AI Processing Service
+  - job_name: 'ai-processing-service'
+    static_configs:
+      - targets: ['ai-processing-service:3004']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # PostgreSQL Database
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Redis Cache
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Kafka Message Broker
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9092']
+    scrape_interval: 30s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Node Exporter (system metrics)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # cAdvisor (container metrics)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Blackbox Exporter (endpoint monitoring)
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://api-gateway/health
+        - http://api-gateway/health/auth
+        - http://api-gateway/health/content
+        - http://api-gateway/health/chat
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+# Remote write configuration (for long-term storage)
+# remote_write:
+#   - url: "https://your-remote-prometheus-endpoint/api/v1/write"
+#     basic_auth:
+#       username: "your-username"
+#       password: "your-password"
+
+# Remote read configuration
+# remote_read:
+#   - url: "https://your-remote-prometheus-endpoint/api/v1/read"
+#     basic_auth:
+#       username: "your-username"
+#       password: "your-password"

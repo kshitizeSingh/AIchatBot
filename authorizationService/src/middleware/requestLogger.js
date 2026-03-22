@@ -15,7 +15,8 @@ module.exports = (req, res, next) => {
       duration: `${duration}ms`,
       ip: req.ip,
       userId: req.user?.user_id || 'anonymous',
-      orgId: req.org_id || 'N/A'
+      orgId: req.org_id || 'N/A',
+      res: data
     });
 
     return originalJson.call(this, data);

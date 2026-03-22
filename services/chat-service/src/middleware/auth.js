@@ -139,11 +139,21 @@ async function requireAuth(req, res, next) {
     // Step 3: Local JWT signature verification (fast, no network)
     let localPayload;
     try {
+      console.log('Verifying JWT locally', { 
+        tokenLength: rawToken.length,
+        jwtSecret: config.JWT_SECRET ? config.JWT_SECRET : 'NOT_CONFIGURED'
+      });
       localPayload = jwt.verify(rawToken, config.JWT_SECRET, { algorithms: ['HS256'] });
       if (localPayload.type !== 'access') {
         throw new AuthenticationError('Invalid token type', 'INVALID_TOKEN');
       }
     } catch (err) {
+      logger.error('JWT verification failed>>>', {
+        errorName: err.name,
+        errorMessage: err.message,
+        tokenLength: rawToken.length,
+        jwtSecretConfigured: !!config.JWT_SECRET
+      });
       const code = err.name === 'TokenExpiredError' ? 'EXPIRED_TOKEN' : 'INVALID_TOKEN';
       throw new AuthenticationError(err.message, code);
     }

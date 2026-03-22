@@ -94,14 +94,15 @@ export class ApiService {
     const result = await this.request('POST', '/v1/auth/login', { email, password });
 
     // Store tokens
-    await AsyncStorage.setItem('access_token', result.access_token);
-    await AsyncStorage.setItem('refresh_token', result.refresh_token);
+    await AsyncStorage.setItem('access_token', result.data.access_token);
+    await AsyncStorage.setItem('refresh_token', result.data.refresh_token);
 
-    return result;
+    return result.data;
   }
 
   async signup(email: string, password: string, orgId: string): Promise<AuthResponse> {
-    return this.request('POST', '/v1/auth/signup', { email, password, org_id: orgId });
+    const result = await this.request('POST', '/v1/auth/signup', { email, password, org_id: orgId });
+    return result.data;
   }
 
   async refreshToken(): Promise<AuthResponse> {
@@ -111,10 +112,10 @@ export class ApiService {
     const result = await this.request('POST', '/v1/auth/refresh', { refresh_token: refreshToken });
 
     // Update stored tokens
-    await AsyncStorage.setItem('access_token', result.access_token);
-    await AsyncStorage.setItem('refresh_token', result.refresh_token);
+    await AsyncStorage.setItem('access_token', result.data.access_token);
+    await AsyncStorage.setItem('refresh_token', result.data.refresh_token);
 
-    return result;
+    return result.data;
   }
 
   // Document methods

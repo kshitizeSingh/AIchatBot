@@ -1,0 +1,384 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI FAQ Platform - API Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+        
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+        
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+        
+        .service-card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .service-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+        
+        .service-card h3 {
+            color: #667eea;
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .service-card .icon {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .auth .icon { background: #ff6b6b; }
+        .content .icon { background: #4ecdc4; }
+        .chat .icon { background: #45b7d1; }
+        .gateway .icon { background: #96ceb4; }
+        
+        .service-card p {
+            margin-bottom: 20px;
+            color: #666;
+        }
+        
+        .service-card .links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .service-card a {
+            display: inline-block;
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            transition: background 0.3s ease;
+        }
+        
+        .service-card a:hover {
+            background: #5a67d8;
+        }
+        
+        .status-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .status-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-healthy { background: #28a745; }
+        .status-warning { background: #ffc107; }
+        .status-error { background: #dc3545; }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            opacity: 0.8;
+        }
+        
+        .endpoints-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .endpoints-section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.8rem;
+        }
+        
+        .endpoint-list {
+            list-style: none;
+        }
+        
+        .endpoint-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .endpoint-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .endpoint-path {
+            font-family: 'Courier New', monospace;
+            background: #f8f9fa;
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: #667eea;
+            font-weight: bold;
+        }
+        
+        .endpoint-description {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .services-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .status-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI FAQ Platform</h1>
+            <p>Comprehensive API Documentation & Service Status</p>
+        </div>
+        
+        <div class="status-section">
+            <h2>🚀 Service Status</h2>
+            <div class="status-grid">
+                <div class="status-item">
+                    <div class="status-indicator status-healthy"></div>
+                    <span>API Gateway</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-indicator status-healthy" id="auth-status"></div>
+                    <span>Auth Service</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-indicator status-healthy" id="content-status"></div>
+                    <span>Content Service</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-indicator status-healthy" id="chat-status"></div>
+                    <span>Chat Service</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="endpoints-section">
+            <h2>📋 API Endpoints</h2>
+            <ul class="endpoint-list">
+                <li>
+                    <span class="endpoint-path">/health</span>
+                    <span class="endpoint-description">API Gateway health check</span>
+                </li>
+                <li>
+                    <span class="endpoint-path">/v1/auth/*</span>
+                    <span class="endpoint-description">Authentication & authorization</span>
+                </li>
+                <li>
+                    <span class="endpoint-path">/v1/org/*</span>
+                    <span class="endpoint-description">Organization management</span>
+                </li>
+                <li>
+                    <span class="endpoint-path">/v1/users/*</span>
+                    <span class="endpoint-description">User management</span>
+                </li>
+                <li>
+                    <span class="endpoint-path">/v1/documents/*</span>
+                    <span class="endpoint-description">Document management</span>
+                </li>
+                <li>
+                    <span class="endpoint-path">/v1/chat/*</span>
+                    <span class="endpoint-description">Chat & AI interactions</span>
+                </li>
+                <li>
+                    <span class="endpoint-path">/metrics</span>
+                    <span class="endpoint-description">System metrics (internal)</span>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="services-grid">
+            <div class="service-card auth">
+                <h3>
+                    <span class="icon">🔐</span>
+                    Authentication Service
+                </h3>
+                <p>Handles user authentication, authorization, JWT tokens, and multi-tenant organization management.</p>
+                <div class="links">
+                    <a href="/docs/auth" target="_blank">API Docs</a>
+                    <a href="/health/auth" target="_blank">Health Check</a>
+                </div>
+            </div>
+            
+            <div class="service-card content">
+                <h3>
+                    <span class="icon">📄</span>
+                    Content Service
+                </h3>
+                <p>Manages document uploads, storage, metadata, and integrates with AI processing pipeline.</p>
+                <div class="links">
+                    <a href="/docs/content" target="_blank">API Docs</a>
+                    <a href="/health/content" target="_blank">Health Check</a>
+                </div>
+            </div>
+            
+            <div class="service-card chat">
+                <h3>
+                    <span class="icon">💬</span>
+                    Chat Service
+                </h3>
+                <p>Provides AI-powered chat functionality with RAG (Retrieval-Augmented Generation) capabilities.</p>
+                <div class="links">
+                    <a href="/docs/chat" target="_blank">API Docs</a>
+                    <a href="/health/chat" target="_blank">Health Check</a>
+                </div>
+            </div>
+            
+            <div class="service-card gateway">
+                <h3>
+                    <span class="icon">🌐</span>
+                    API Gateway
+                </h3>
+                <p>Central entry point providing routing, load balancing, rate limiting, and security for all services.</p>
+                <div class="links">
+                    <a href="/health" target="_blank">Health Check</a>
+                    <a href="/metrics" target="_blank">Metrics</a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>© 2024 AI FAQ Platform. Built with ❤️ for intelligent document interaction.</p>
+        </div>
+    </div>
+    
+    <script>
+        // Function to check service health
+        async function checkServiceHealth(service, elementId) {
+            try {
+                const response = await fetch(`/health/${service}`, { 
+                    method: 'GET',
+                    timeout: 5000
+                });
+                
+                const element = document.getElementById(elementId);
+                if (response.ok) {
+                    element.className = 'status-indicator status-healthy';
+                } else {
+                    element.className = 'status-indicator status-warning';
+                }
+            } catch (error) {
+                const element = document.getElementById(elementId);
+                element.className = 'status-indicator status-error';
+            }
+        }
+        
+        // Check all services on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            checkServiceHealth('auth', 'auth-status');
+            checkServiceHealth('content', 'content-status');
+            checkServiceHealth('chat', 'chat-status');
+            
+            // Refresh status every 30 seconds
+            setInterval(() => {
+                checkServiceHealth('auth', 'auth-status');
+                checkServiceHealth('content', 'content-status');
+                checkServiceHealth('chat', 'chat-status');
+            }, 30000);
+        });
+    </script>
+</body>
+</html>

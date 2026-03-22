@@ -1,0 +1,335 @@
+# Docker Compose for Nginx API Gateway and Backend Services
+# This configuration sets up the complete AI FAQ Platform infrastructure
+
+version: '3.8'
+
+services:
+  # Nginx API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: faq-api-gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./conf.d:/etc/nginx/conf.d:ro
+      - ./html:/usr/share/nginx/html:ro
+      - ./ssl:/etc/ssl:ro
+      - nginx-logs:/var/log/nginx
+    environment:
+      - TZ=UTC
+    depends_on:
+      - auth-service
+      - content-service
+      - chat-service
+      - ai-processing-service
+    networks:
+      - faq-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/health-check.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Authorization Service
+  auth-service:
+    build:
+      context: ../authorizationService
+      dockerfile: Dockerfile
+    container_name: faq-auth-service
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=fce_auth_db
+      - DB_USER=fce_user
+      - DB_PASSWORD=SecurePass123
+      - JWT_SECRET=${JWT_SECRET:-your-256-bit-secret-key-change-in-production-12345678}
+      - LOG_LEVEL=info
+      - CORS_ORIGIN=http://localhost:80,http://api.faq-platform.local
+    depends_on:
+      - postgres
+    networks:
+      - faq-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Content Service
+  content-service:
+    build:
+      context: ../services/content-service
+      dockerfile: Dockerfile
+    container_name: faq-content-service
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=production
+      - PORT=3002
+      - LOG_LEVEL=info
+      - DATABASE_URL=postgres://fce_user:SecurePass123@postgres:5432/faq_platform
+      - STORAGE_TYPE=s3
+      - AWS_REGION=us-east-1
+      - AWS_S3_BUCKET=faq-documents
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_CLIENT_ID=content-service
+      - KAFKA_GROUP_ID=content-service-group
+      - MAX_FILE_SIZE=52428800
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - faq-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Chat Service
+  chat-service:
+    build:
+      context: ../services/chat-service
+      dockerfile: Dockerfile
+    container_name: faq-chat-service
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - JWT_SECRET=${JWT_SECRET:-your-256-bit-secret-key-change-in-production-12345678}
+      - AUTH_SERVICE_URL=http://auth-service:3000
+      - DATABASE_URL=postgres://postgres:admin@postgres:5432/postgres
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX_NAME=faq-platform
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+      - OLLAMA_GENERATION_MODEL=llama3
+      - LOG_LEVEL=info
+    depends_on:
+      - postgres
+      - ollama
+    networks:
+      - faq-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # AI Processing Service
+  ai-processing-service:
+    build:
+      context: ../services/ai-processing-service
+      dockerfile: Dockerfile
+    container_name: faq-ai-processing-service
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+      - LOG_LEVEL=info
+      - LOCAL_TEST_MODE=false
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_GROUP_ID=ai-processing-service
+      - DATABASE_URL=postgres://fce_user:SecurePass123@postgres:5432/faq_platform
+      - STORAGE_TYPE=s3
+      - AWS_REGION=us-east-1
+      - AWS_S3_BUCKET=faq-documents
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX_NAME=faq-platform
+    depends_on:
+      - postgres
+      - kafka
+      - ollama
+    networks:
+      - faq-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: faq-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_MULTIPLE_DATABASES=fce_auth_db,faq_platform
+      - POSTGRES_MULTIPLE_USERS=fce_user:SecurePass123
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh:ro
+    networks:
+      - faq-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Kafka Message Broker
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    container_name: faq-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_BROKER_ID=1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_AUTO_CREATE_TOPICS_ENABLE=true
+    depends_on:
+      - zookeeper
+    networks:
+      - faq-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Zookeeper for Kafka
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: faq-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=2181
+      - ZOOKEEPER_TICK_TIME=2000
+    networks:
+      - faq-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Ollama AI Service
+  ollama:
+    image: ollama/ollama:latest
+    container_name: faq-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - faq-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Redis Cache (Optional)
+  redis:
+    image: redis:7-alpine
+    container_name: faq-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-defaultpassword}
+    networks:
+      - faq-platform
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Monitoring - Prometheus (Optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: faq-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - faq-platform
+    restart: unless-stopped
+
+  # Monitoring - Grafana (Optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: faq-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    networks:
+      - faq-platform
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+    driver: local
+  ollama-data:
+    driver: local
+  redis-data:
+    driver: local
+  nginx-logs:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  faq-platform:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

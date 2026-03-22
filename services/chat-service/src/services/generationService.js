@@ -2,6 +2,7 @@ const axios = require('axios');
 const config = require('../config');
 const logger = require('../utils/logger');
 const { retryOllama } = require('../utils/retry');
+const { ollamaCircuitBreaker } = require('../utils/circuitBreaker');
 
 /**
  * Generation service for Ollama chat completion
@@ -70,12 +71,16 @@ Format your responses in a clear, easy-to-read manner.`;
     const {
       temperature = 0.7,
       maxTokens = 1024,
-      stream = false,
-      model = this.generationModel
+      stream = true,
+      model = this.generationModel,
+      timeout = this.timeout // Allow timeout override from options
     } = options;
 
+    // Apply model-specific timeout configurations
+    const effectiveTimeout = this.getModelSpecificTimeout(model, timeout);
+
     const startTime = Date.now();
-    
+    console.log('options recieved', options, stream)
     try {
       logger.logExternalCall('ollama', 'generation', {
         model,
@@ -83,13 +88,17 @@ Format your responses in a clear, easy-to-read manner.`;
         temperature,
         maxTokens,
         stream,
-        timeout: this.timeout
+        timeout: effectiveTimeout,
+        originalTimeout: this.timeout
       });
 
+      // Pass effective timeout to generation methods
+      const enhancedOptions = { ...options, timeout: effectiveTimeout };
+
       if (stream) {
-        return await this.generateStreamingResponse(messages, options);
+        return await this.generateStreamingResponse(messages, enhancedOptions);
       } else {
-        return await this.generateNonStreamingResponse(messages, options);
+        return await this.generateNonStreamingResponse(messages, enhancedOptions);
       }
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -98,25 +107,105 @@ Format your responses in a clear, easy-to-read manner.`;
         model,
         messageCount: messages.length,
         duration: `${duration}ms`,
+        timeout: effectiveTimeout,
         error: error.message,
+        errorCode: error.code,
         stack: error.stack
       });
 
-      // Re-throw with more context
+      // Enhanced error handling with timeout-specific messages and circuit breaker awareness
+      if (error.circuitBreakerState === 'OPEN') {
+        logger.warn('Circuit breaker is open, request rejected', {
+          model,
+          timeout: effectiveTimeout,
+          error: error.message
+        });
+        throw new Error(`Ollama service is temporarily unavailable due to repeated failures. Circuit breaker will retry automatically. ${error.message}`);
+      }
+      
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        logger.error('Ollama request timeout', {
+          model,
+          timeout: effectiveTimeout,
+          messageCount: messages.length,
+          duration
+        });
+        throw new Error(`Ollama request timed out after ${effectiveTimeout}ms. Consider using a smaller context, faster model, or check Ollama service performance.`);
+      }
+      
       if (error.code === 'ECONNREFUSED') {
-        throw new Error('Ollama service is not available. Please check if Ollama is running.');
+        logger.error('Ollama service connection refused', {
+          model,
+          url: this.ollamaUrl,
+          timeout: effectiveTimeout
+        });
+        throw new Error('Ollama service is not available. Please check if Ollama is running and accessible.');
       }
       
       if (error.response?.status === 404) {
-        throw new Error(`Generation model '${model}' not found. Please pull the model first.`);
+        logger.error('Ollama model not found', {
+          model,
+          availableModels: 'Check with ollama list command'
+        });
+        throw new Error(`Generation model '${model}' not found. Please pull the model first using: ollama pull ${model}`);
       }
       
       if (error.response?.status === 400) {
+        logger.error('Invalid Ollama request', {
+          model,
+          error: error.response.data?.error || error.message,
+          messageCount: messages.length
+        });
         throw new Error(`Invalid request to Ollama: ${error.response.data?.error || error.message}`);
       }
 
+      if (error.response?.status >= 500) {
+        logger.error('Ollama server error', {
+          model,
+          status: error.response.status,
+          error: error.response.data?.error || error.message
+        });
+        throw new Error(`Ollama server error (${error.response.status}): ${error.response.data?.error || error.message}`);
+      }
+
+      // Generic error with enhanced context
+      logger.error('Unexpected generation service error', {
+        model,
+        timeout: effectiveTimeout,
+        messageCount: messages.length,
+        duration,
+        errorCode: error.code,
+        errorMessage: error.message
+      });
+      
       throw new Error(`Generation service error: ${error.message}`);
     }
+  }
+
+  /**
+   * Get model-specific timeout configuration
+   * @param {string} model - Model name
+   * @param {number} defaultTimeout - Default timeout value
+   * @returns {number} Effective timeout in milliseconds
+   */
+  getModelSpecificTimeout(model, defaultTimeout) {
+    const modelTimeouts = {
+      'llama3:latest': 120000,        // 2 minutes for llama3
+      'gpt-oss:120b-cloud': 300000,  // 5 minutes for large cloud model
+      'nomic-embed-text:latest': 30000 // 30 seconds for embedding
+    };
+
+    const modelSpecificTimeout = modelTimeouts[model];
+    if (modelSpecificTimeout) {
+      logger.info('Using model-specific timeout', {
+        model,
+        timeout: modelSpecificTimeout,
+        defaultTimeout
+      });
+      return modelSpecificTimeout;
+    }
+
+    return defaultTimeout;
   }
 
   /**
@@ -129,41 +218,45 @@ Format your responses in a clear, easy-to-read manner.`;
     const {
       temperature = 0.7,
       maxTokens = 1024,
-      model = this.generationModel
+      model = this.generationModel,
+      timeout = this.timeout
     } = options;
 
     const startTime = Date.now();
 
-    const result = await retryOllama(async () => {
-      const response = await axios.post(
-        `${this.ollamaUrl}/api/chat`,
-        {
-          model,
-          messages,
-          stream: false,
-          options: {
-            temperature,
-            num_predict: maxTokens
+    const result = await ollamaCircuitBreaker.execute(async () => {
+      return await retryOllama(async () => {
+        const response = await axios.post(
+          `${this.ollamaUrl}/api/chat`,
+          {
+            model,
+            messages,
+            stream: false,
+            options: {
+              temperature,
+              num_predict: maxTokens
+            }
+          },
+          {
+            timeout: timeout, // Use the passed timeout value
+            headers: {
+              'Content-Type': 'application/json'
+            }
           }
-        },
-        {
-          timeout: this.timeout,
-          headers: {
-            'Content-Type': 'application/json'
-          }
+        );
+
+        if (!response.data || !response.data.message) {
+          throw new Error('Invalid response from Ollama chat API');
         }
-      );
 
-      if (!response.data || !response.data.message) {
-        throw new Error('Invalid response from Ollama chat API');
-      }
-
-      return response.data;
-    }, {
-      context: {
-        model,
-        messageCount: messages.length
-      }
+        return response.data;
+      }, {
+        context: {
+          model,
+          messageCount: messages.length,
+          timeout
+        }
+      });
     });
 
     const duration = Date.now() - startTime;
@@ -215,34 +308,37 @@ Format your responses in a clear, easy-to-read manner.`;
     let promptTokens = 0;
     let completionTokens = 0;
 
-    return new Promise((resolve, reject) => {
-      retryOllama(async () => {
-        const response = await axios.post(
-          `${this.ollamaUrl}/api/chat`,
-          {
-            model,
-            messages,
-            stream: true,
-            options: {
-              temperature,
-              num_predict: maxTokens
+        return new Promise((resolve, reject) => {
+      ollamaCircuitBreaker.execute(async () => {
+        return await retryOllama(async () => {
+          const response = await axios.post(
+            `${this.ollamaUrl}/api/chat`,
+            {
+              model,
+              messages,
+              stream: true,
+              options: {
+                temperature,
+                num_predict: maxTokens
+              }
+            },
+            {
+              timeout: options.timeout || this.timeout, // Use options timeout if provided
+              responseType: 'stream',
+              headers: {
+                'Content-Type': 'application/json'
+              }
             }
-          },
-          {
-            timeout: this.timeout,
-            responseType: 'stream',
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          }
-        );
+          );
 
-        return response;
-      }, {
-        context: {
-          model,
-          messageCount: messages.length
-        }
+          return response;
+        }, {
+          context: {
+            model,
+            messageCount: messages.length,
+            timeout: options.timeout || this.timeout
+          }
+        });
       })
       .then(response => {
         response.data.on('data', (chunk) => {
@@ -318,6 +414,13 @@ Format your responses in a clear, easy-to-read manner.`;
         });
       })
       .catch(error => {
+        // Handle circuit breaker errors specifically
+        if (error.circuitBreakerState === 'OPEN') {
+          logger.warn('Ollama circuit breaker is open, rejecting streaming request', {
+            error: error.message
+          });
+        }
+        
         if (onError) {
           onError(error);
         }
@@ -363,17 +466,31 @@ Format your responses in a clear, easy-to-read manner.`;
   }
 
   /**
-   * Get generation service health status
+   * Get generation service health status with circuit breaker monitoring
    * @returns {Promise<Object>} Health status object
    */
   async getHealthStatus() {
     try {
+      // Get circuit breaker status
+      const circuitBreakerStatus = ollamaCircuitBreaker.getStatus();
+      
       const isAvailable = await this.isAvailable();
       
       if (!isAvailable) {
         return {
           status: 'unhealthy',
           message: `Ollama service or model '${this.generationModel}' not available`,
+          circuitBreaker: circuitBreakerStatus,
+          timestamp: new Date().toISOString()
+        };
+      }
+
+      // Skip health check generation if circuit breaker is open
+      if (circuitBreakerStatus.state === 'OPEN') {
+        return {
+          status: 'unhealthy',
+          message: 'Generation service circuit breaker is open due to repeated failures',
+          circuitBreaker: circuitBreakerStatus,
           timestamp: new Date().toISOString()
         };
       }
@@ -390,18 +507,30 @@ Format your responses in a clear, easy-to-read manner.`;
         }
       ];
       
-      await this.generateResponse(testMessages, { maxTokens: 10 });
+      const startTime = Date.now();
+      await this.generateResponse(testMessages, { maxTokens: 10, timeout: 10000 }); // Short timeout for health check
+      const healthCheckDuration = Date.now() - startTime;
 
       return {
         status: 'healthy',
         message: 'Generation service is operational',
         model: this.generationModel,
+        healthCheckDuration: `${healthCheckDuration}ms`,
+        circuitBreaker: circuitBreakerStatus,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
+      const circuitBreakerStatus = ollamaCircuitBreaker.getStatus();
+      
       return {
         status: 'unhealthy',
         message: `Generation service error: ${error.message}`,
+        error: {
+          code: error.code,
+          message: error.message,
+          circuitBreakerState: error.circuitBreakerState
+        },
+        circuitBreaker: circuitBreakerStatus,
         timestamp: new Date().toISOString()
       };
     }
@@ -411,4 +540,6 @@ Format your responses in a clear, easy-to-read manner.`;
 // Create singleton instance
 const generationService = new GenerationService();
 
+// Export both the service and circuit breaker for monitoring
 module.exports = generationService;
+module.exports.circuitBreaker = ollamaCircuitBreaker;

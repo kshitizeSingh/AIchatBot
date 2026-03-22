@@ -13,13 +13,23 @@ const { ValidationError, NotFoundError } = require('../middleware/errorHandler')
 class OrchestrationService {
   constructor() {
     this.maxQueryLength = 2000;
+    // CHANGE: Updated default options with model-specific configurations
     this.defaultOptions = {
       top_k: 5,
       min_score: 0.3,
       temperature: 0.7,
       max_tokens: 1024,
-      stream: false
+      stream: false,
+      // CHANGE: Add model-specific timeout configurations
+      model_timeout_overrides: {
+        'llama3:latest': 120000,        // 2 minutes for llama3
+        'gpt-oss:120b-cloud': 300000,  // 5 minutes for large cloud model
+        'nomic-embed-text:latest': 30000 // 30 seconds for embedding
+      }
     };
+    // CHANGE: Add model validation cache
+    this.modelValidationCache = new Map();
+    this.modelValidationTTL = 300000; // 5 minutes
   }
 
   /**
@@ -49,6 +59,9 @@ class OrchestrationService {
         ...requestOptions,
         ...options
       };
+      
+      // CHANGE: Add model availability check before starting pipeline
+      await this.validateModelAvailability(mergedOptions.model || 'llama3:latest');
       
       logger.info('Starting RAG pipeline', {
         requestId,
@@ -135,9 +148,25 @@ class OrchestrationService {
     logger.logRagStage('context-building', { requestId, passagesCount: retrievalResult.passages.length });
     const contextData = retrievalService.buildContextString(retrievalResult.passages, options);
     
+
+
+    // ENHANCED: Add intelligent context optimization for better performance
+    const modelName = options.model || 'llama3:latest';
+    const optimizedContext = this.optimizeContextForModel(contextData.contextString, modelName);
+    
+    // Log context optimization metrics
+    logger.info('Context optimization completed', {
+      requestId,
+      model: modelName,
+      originalLength: contextData.contextString.length,
+      optimizedLength: optimizedContext.length,
+      passagesCount: retrievalResult.passages.length,
+      sourcesCount: contextData.sources.length
+    });
+    
     // Step 6: Build RAG system prompt
-    logger.logRagStage('prompt-building', { requestId, contextLength: contextData.contextString.length });
-    const systemPrompt = generationService.buildRagPrompt(contextData.contextString);
+    logger.logRagStage('prompt-building', { requestId, contextLength: optimizedContext.length });
+    const systemPrompt = generationService.buildRagPrompt(optimizedContext);
     
     // Step 7: Persist user message
     logger.logRagStage('user-message-persistence', { requestId });
@@ -149,19 +178,22 @@ class OrchestrationService {
     // Step 8: Build messages array for generation
     const messages = this.buildMessagesArray(systemPrompt, history, query);
     
+    // CHANGE: Apply model-specific timeout
+    const modelSpecificOptions = this.applyModelSpecificOptions(options);
+    
     // Step 9: Generate answer
     logger.logRagStage('generation', { requestId, messageCount: messages.length, stream: options.stream });
     let generationResult;
     
     if (options.stream) {
-      generationResult = await this.handleStreamingGeneration(messages, options, {
+      generationResult = await this.handleStreamingGeneration(messages, modelSpecificOptions, {
         conversation,
         org,
         sources: contextData.sources,
         requestId
       });
     } else {
-      generationResult = await generationService.generateResponse(messages, options);
+      generationResult = await generationService.generateResponse(messages, modelSpecificOptions);
       
       // Step 10: Persist assistant message
       logger.logRagStage('assistant-message-persistence', { requestId });
@@ -184,6 +216,264 @@ class OrchestrationService {
     }
     
     return generationResult;
+  }
+
+  /**
+   * CHANGE: Validate model availability with caching
+   * @param {string} modelName - Model name to validate
+   * @returns {Promise<boolean>} Model availability
+   */
+  async validateModelAvailability(modelName) {
+    const cacheKey = `model_${modelName}`;
+    const cached = this.modelValidationCache.get(cacheKey);
+    
+    if (cached && (Date.now() - cached.timestamp) < this.modelValidationTTL) {
+      if (!cached.available) {
+        throw new ValidationError(`Model '${modelName}' is not available`);
+      }
+      return true;
+    }
+    
+    try {
+      const isAvailable = await generationService.isAvailable();
+      this.modelValidationCache.set(cacheKey, {
+        available: isAvailable,
+        timestamp: Date.now()
+      });
+      
+      if (!isAvailable) {
+        throw new ValidationError(`Model '${modelName}' is not available`);
+      }
+      
+      return true;
+    } catch (error) {
+      this.modelValidationCache.set(cacheKey, {
+        available: false,
+        timestamp: Date.now()
+      });
+      throw new ValidationError(`Model validation failed: ${error.message}`);
+    }
+  }
+
+  /**
+
+   * ENHANCED: Optimize context based on model capabilities with intelligent truncation
+   * @param {string} context - Original context
+   * @param {string} modelName - Target model name
+   * @returns {string} Optimized context
+   */
+  optimizeContextForModel(context, modelName) {
+    const modelLimits = {
+
+
+
+      'llama3:latest': { 
+        maxContextTokens: 3000, 
+        maxContextChars: 10000,  // Reduced from 12000 for better performance
+        priorityKeywords: ['answer', 'solution', 'how to', 'steps', 'process']
+      },
+      'gpt-oss:120b-cloud': { 
+        maxContextTokens: 8000, 
+        maxContextChars: 28000,  // Reduced from 32000 for stability
+        priorityKeywords: ['detailed', 'comprehensive', 'analysis', 'explanation']
+      },
+      'nomic-embed-text:latest': { 
+        maxContextTokens: 1000, 
+        maxContextChars: 3500,   // Reduced from 4000 for embedding efficiency
+        priorityKeywords: ['key', 'important', 'main', 'primary']
+      }
+    };
+    
+    const limits = modelLimits[modelName] || modelLimits['llama3:latest'];
+    
+    if (context.length <= limits.maxContextChars) {
+      logger.debug('Context within limits, no optimization needed', {
+        modelName,
+        contextLength: context.length,
+        limit: limits.maxContextChars
+      });
+      return context;
+    }
+    
+
+
+
+    // Enhanced optimization with priority-based selection
+    const optimized = this.intelligentContextTruncation(context, limits);
+    
+
+
+
+
+
+
+
+
+    logger.info('Context optimized for model', {
+      modelName,
+      originalLength: context.length,
+      optimizedLength: optimized.length,
+
+      reduction: `${((context.length - optimized.length) / context.length * 100).toFixed(1)}%`,
+      limit: limits.maxContextChars
+    });
+    
+    return optimized;
+  }
+
+  /**
+   * Intelligent context truncation with priority-based selection
+   * @param {string} context - Original context
+   * @param {Object} limits - Model limits and configuration
+   * @returns {string} Optimized context
+   */
+  intelligentContextTruncation(context, limits) {
+    const paragraphs = context.split('\n\n').filter(p => p.trim().length > 0);
+    const priorityKeywords = limits.priorityKeywords || [];
+    
+    // Score paragraphs based on priority keywords and position
+    const scoredParagraphs = paragraphs.map((paragraph, index) => {
+      let score = 0;
+      
+      // Priority keyword scoring
+      priorityKeywords.forEach(keyword => {
+        const regex = new RegExp(keyword, 'gi');
+        const matches = paragraph.match(regex) || [];
+        score += matches.length * 10;
+      });
+      
+      // Position scoring (earlier paragraphs get higher scores)
+      score += Math.max(0, 50 - (index * 5));
+      
+      // Length penalty (very short or very long paragraphs get lower scores)
+      if (paragraph.length < 50) score -= 20;
+      if (paragraph.length > 1000) score -= 10;
+      
+      return {
+        content: paragraph,
+        score,
+        length: paragraph.length,
+        index
+      };
+    });
+    
+    // Sort by score (highest first)
+    scoredParagraphs.sort((a, b) => b.score - a.score);
+    
+    // Select paragraphs until we reach the limit
+    let optimized = '';
+    let currentLength = 0;
+    const selectedParagraphs = [];
+    
+    for (const paragraph of scoredParagraphs) {
+      const potentialLength = currentLength + paragraph.length + 2; // +2 for \n\n
+      
+      if (potentialLength <= limits.maxContextChars) {
+        selectedParagraphs.push(paragraph);
+        currentLength = potentialLength;
+      } else {
+        // Try to fit a truncated version of this paragraph
+        const remainingSpace = limits.maxContextChars - currentLength - 2;
+        if (remainingSpace > 100) { // Only if we have meaningful space
+          const truncated = this.truncateAtSentenceBoundary(paragraph.content, remainingSpace);
+          if (truncated.length > 50) { // Only if truncation leaves meaningful content
+            selectedParagraphs.push({
+              ...paragraph,
+              content: truncated,
+              length: truncated.length
+            });
+            break;
+          }
+        }
+        break;
+      }
+    }
+    
+    // Sort selected paragraphs back to original order for coherence
+    selectedParagraphs.sort((a, b) => a.index - b.index);
+    
+    // Combine selected paragraphs
+    optimized = selectedParagraphs.map(p => p.content).join('\n\n');
+    
+    // Final fallback: sentence-level truncation if still too long
+    if (optimized.length > limits.maxContextChars) {
+      optimized = this.truncateAtSentenceBoundary(optimized, limits.maxContextChars);
+    }
+    
+    return optimized.trim();
+  }
+
+  /**
+   * Truncate text at sentence boundary
+   * @param {string} text - Text to truncate
+   * @param {number} maxLength - Maximum length
+   * @returns {string} Truncated text
+   */
+  truncateAtSentenceBoundary(text, maxLength) {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    
+    const sentences = text.split(/[.!?]+\s+/);
+    let truncated = '';
+    
+    for (const sentence of sentences) {
+      const potential = truncated + sentence + '. ';
+      if (potential.length > maxLength) {
+        break;
+      }
+      truncated = potential;
+    }
+    
+    // If no complete sentences fit, truncate at word boundary
+    if (truncated.length === 0) {
+      const words = text.split(' ');
+      for (const word of words) {
+        const potential = truncated + word + ' ';
+        if (potential.length > maxLength) {
+          break;
+        }
+        truncated = potential;
+      }
+    }
+    
+    return truncated.trim();
+  }
+
+  /**
+   * CHANGE: Apply model-specific options including timeouts
+   * @param {Object} options - Base options
+   * @returns {Object} Model-specific options
+   */
+  applyModelSpecificOptions(options) {
+    const modelName = options.model || 'llama3:latest';
+    const modelSpecificOptions = { ...options };
+    
+    // Apply timeout overrides
+    if (this.defaultOptions.model_timeout_overrides[modelName]) {
+      modelSpecificOptions.timeout = this.defaultOptions.model_timeout_overrides[modelName];
+    }
+    
+    // Apply model-specific parameter adjustments
+    switch (modelName) {
+      case 'llama3:latest':
+        // Optimize for faster response
+        modelSpecificOptions.temperature = Math.min(options.temperature || 0.7, 0.8);
+        modelSpecificOptions.max_tokens = Math.min(options.max_tokens || 1024, 1024);
+        break;
+        
+      case 'gpt-oss:120b-cloud':
+        // Allow higher creativity for larger model
+        modelSpecificOptions.temperature = options.temperature || 0.9;
+        modelSpecificOptions.max_tokens = Math.min(options.max_tokens || 2048, 2048);
+        break;
+        
+      default:
+        // Keep original options
+        break;
+    }
+    
+    return modelSpecificOptions;
   }
 
   /**
@@ -424,7 +714,8 @@ class OrchestrationService {
       document_id,
       temperature,
       max_tokens,
-      stream
+      stream,
+      model // CHANGE: Add model validation
     } = options;
     
     if (top_k !== undefined) {
@@ -457,6 +748,18 @@ class OrchestrationService {
     
     if (stream !== undefined && typeof stream !== 'boolean') {
       throw new ValidationError('stream must be a boolean');
+    }
+    
+    // CHANGE: Add model validation
+    if (model !== undefined) {
+      if (typeof model !== 'string') {
+        throw new ValidationError('model must be a string');
+      }
+      
+      const supportedModels = ['llama3:latest', 'gpt-oss:120b-cloud', 'nomic-embed-text:latest'];
+      if (!supportedModels.includes(model)) {
+        throw new ValidationError(`Unsupported model. Supported models: ${supportedModels.join(', ')}`);
+      }
     }
   }
 
