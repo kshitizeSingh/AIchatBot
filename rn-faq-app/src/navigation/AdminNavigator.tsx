@@ -1,22 +1,25 @@
-// src/navigation/UserNavigator.tsx
+// src/navigation/AdminNavigator.tsx
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 // import Icon from 'react-native-vector-icons/MaterialIcons';
 // Using Text as placeholder for icons until react-native-vector-icons is properly configured
 import { Text } from 'react-native';
-import ChatScreen from '../screens/user/ChatScreen';
 
-import HistoryScreen from '../screens/user/HistoryScreen';
-import ProfileScreen from '../screens/user/ProfileScreen';
-import type { UserTabParamList, UserStackParamList } from '../types';
+// Admin Screens
+import DashboardScreen from '../screens/admin/DashboardScreen';
+import DocumentScreen from '../screens/admin/DocumentScreen';
+import UploadScreen from '../screens/admin/UploadScreen';
+import UserManagementScreen from '../screens/admin/UserManagementScreen';
 
-const Tab = createBottomTabNavigator<UserTabParamList>();
-const Stack = createStackNavigator<UserStackParamList>();
+// Types
+import type { AdminTabParamList, AdminStackParamList } from '../types';
 
+const Tab = createBottomTabNavigator<AdminTabParamList>();
+const Stack = createStackNavigator<AdminStackParamList>();
 
-// Chat Stack Navigator
-const ChatStackNavigator = () => {
+// Document Stack Navigator
+const DocumentStackNavigator = () => {
   return (
     <Stack.Navigator
       screenOptions={{
@@ -30,15 +33,20 @@ const ChatStackNavigator = () => {
       }}
     >
       <Stack.Screen
-        name="Chat"
-        component={ChatScreen}
-        options={{ title: 'AI FAQ Assistant' }}
+        name="DocumentList"
+        component={DocumentScreen}
+        options={{ title: 'Documents' }}
+      />
+      <Stack.Screen
+        name="Upload"
+        component={UploadScreen}
+        options={{ title: 'Upload Document' }}
       />
     </Stack.Navigator>
   );
 };
 
-const UserNavigator: React.FC = () => {
+const AdminNavigator: React.FC = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -46,14 +54,14 @@ const UserNavigator: React.FC = () => {
           let iconText: string;
 
           switch (route.name) {
-            case 'ChatTab':
-              iconText = '💬';
+            case 'Dashboard':
+              iconText = '📊';
               break;
-            case 'History':
-              iconText = '📝';
+            case 'Documents':
+              iconText = '📄';
               break;
-            case 'Profile':
-              iconText = '👤';
+            case 'Users':
+              iconText = '👥';
               break;
             default:
               iconText = '❓';
@@ -79,28 +87,28 @@ const UserNavigator: React.FC = () => {
       })}
     >
       <Tab.Screen
-        name="ChatTab"
-        component={ChatStackNavigator}
+        name="Dashboard"
+        component={DashboardScreen}
         options={{
-          title: 'Chat',
+          title: 'Dashboard',
         }}
       />
       <Tab.Screen
-        name="History"
-        component={HistoryScreen}
+        name="Documents"
+        component={DocumentStackNavigator}
         options={{
-          title: 'History',
+          title: 'Documents',
         }}
       />
       <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
+        name="Users"
+        component={UserManagementScreen}
         options={{
-          title: 'Profile',
+          title: 'Users',
         }}
       />
     </Tab.Navigator>
   );
 };
 
-export default UserNavigator;
+export default AdminNavigator;

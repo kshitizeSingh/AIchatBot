@@ -223,7 +223,22 @@ Format your responses in a clear, easy-to-read manner.`;
     } = options;
 
     const startTime = Date.now();
-
+    console.log('Non-streaming generation options:', options,  `${this.ollamaUrl}/api/chat`,
+          {
+            model,
+            messages,
+            stream: false,
+            options: {
+              temperature,
+              num_predict: maxTokens
+            }
+          },
+          {
+            timeout: timeout, // Use the passed timeout value
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
     const result = await ollamaCircuitBreaker.execute(async () => {
       return await retryOllama(async () => {
         const response = await axios.post(

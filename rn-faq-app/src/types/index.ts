@@ -96,7 +96,17 @@ export type AdminTabParamList = {
 };
 
 export type UserStackParamList = {
-  Chat: undefined;
+
+  Chat: { conversationId?: string };
+};
+
+export type UserTabParamList = {
+  ChatTab: undefined;
   History: undefined;
   Profile: undefined;
+};
+
+export type AdminStackParamList = {
+  DocumentList: undefined;
+  Upload: undefined;
 };

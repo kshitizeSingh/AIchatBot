@@ -33,6 +33,24 @@ export const useAuth = () => {
     }
   };
 
+  const signup = async (userData: { name: string; email: string; password: string }) => {
+    try {
+      dispatch(setLoading(true));
+      dispatch(clearError());
+
+      const result = await sdk.signup(userData);
+      
+      // Don't auto-login after signup, let user manually login
+      return result;
+    } catch (error: any) {
+      const errorMessage = error.message || 'Registration failed';
+      dispatch(setError(errorMessage));
+      throw new Error(errorMessage);
+    } finally {
+      dispatch(setLoading(false));
+    }
+  };
+
   const logoutUser = async () => {
     try {
       // Call SDK logout if needed
@@ -54,6 +72,7 @@ export const useAuth = () => {
     isLoading,
     error,
     login,
+    signup,
     logout: logoutUser,
     clearError: clearAuthError,
   };

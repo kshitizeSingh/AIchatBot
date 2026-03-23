@@ -3,6 +3,7 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useSelector } from 'react-redux';
 import AuthNavigator from './AuthNavigator';
+import AdminNavigator from './AdminNavigator';
 import UserNavigator from './UserNavigator';
 import type { RootStackParamList } from '../types';
 import type { RootState } from '../store/store';
@@ -16,6 +17,8 @@ const AppNavigator: React.FC = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!isAuthenticated ? (
         <Stack.Screen name="Auth" component={AuthNavigator} />
+      ) : user?.role === 'admin' ? (
+        <Stack.Screen name="Admin" component={AdminNavigator} />
       ) : (
         <Stack.Screen name="User" component={UserNavigator} />
       )}
